@@ -141,8 +141,6 @@ func getDigit(s string, rev bool, adv bool) (int, error) {
 					return j + 1, nil
 				}
 			}
-
-			// check numerics
 		}
 	}
 
