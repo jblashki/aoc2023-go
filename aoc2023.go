@@ -10,16 +10,19 @@ import (
 
 	"aoc2023/days/day1"
 	"aoc2023/days/day2"
+	"aoc2023/days/day3"
 )
 
 var argCalls = map[string]func(bool){
 	"DAY1": day1.RunDay,
 	"DAY2": day2.RunDay,
+	"DAY3": day3.RunDay,
 }
 
 var functionPointers = []func(bool){
 	day1.RunDay,
 	day2.RunDay,
+	day3.RunDay,
 }
 
 var programName = ""
