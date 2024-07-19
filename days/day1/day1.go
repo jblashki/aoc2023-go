@@ -35,7 +35,7 @@ var numsRev = []string{
 	"ENIN",
 }
 
-// RunDay runs Advent of Code Day 4 Puzzle
+// RunDay runs Advent of Code Day 1 Puzzle
 func RunDay(verbose bool) {
 	var aResult int
 	var bResult int
