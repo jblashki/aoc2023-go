@@ -85,15 +85,7 @@ func b(verbose bool, symbols [][]byte, numberList []number) (int, error) {
 				}
 			}
 		}
-		// if checkNumber(symbols, numberList[i]) {
-		// 	if verbose {
-		// 		fmt.Printf("%d matched\n", numberList[i].num)
-		// 	}
-		// 	retValue += numberList[i].num
-		// }
 	}
-
-	return retValue, nil
 
 	return retValue, nil
 }
