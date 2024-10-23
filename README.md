@@ -33,3 +33,7 @@ Below is the list of links to the puzzles used in this program:
 * [Advent of Code 2023 - Day 2](https://adventofcode.com/2023/day/2)
 * [Advent of Code 2023 - Day 3](https://adventofcode.com/2023/day/3)
 * [Advent of Code 2023 - Day 4](https://adventofcode.com/2023/day/4)
+* [Advent of Code 2023 - Day 5](https://adventofcode.com/2023/day/5)
+* [Advent of Code 2023 - Day 6](https://adventofcode.com/2023/day/6)
+* [Advent of Code 2023 - Day 7](https://adventofcode.com/2023/day/7)
+* [Advent of Code 2023 - Day 8](https://adventofcode.com/2023/day/8)
