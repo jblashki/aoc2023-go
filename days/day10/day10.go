@@ -17,18 +17,26 @@ const (
 	WEST  = iota
 )
 
+const (
+	NOT_SET = iota
+	INSIDE  = iota
+	OUTSIDE = iota
+)
+
 type coord struct {
 	x int
 	y int
 }
 
 type pipe struct {
-	symbol     byte
-	name       string
-	directions [4]bool
-	pipes      [4]*pipe
-	position   coord
-	distance   int
+	symbol      byte
+	name        string
+	directions  [4]bool
+	pipes       [4]*pipe
+	position    coord
+	distance    int
+	insideOut   int
+	virtualNode bool
 }
 
 // RunDay runs Advent of Code Day 8 Puzzle
@@ -57,7 +65,7 @@ func RunDay(verbose bool) {
 	} else {
 		fmt.Printf("%va: Answer = %v\n", name, aResult)
 	}
-	bResult, err = b(verbose)
+	bResult, err = b(pipeMap, verbose)
 	if err != nil {
 		fmt.Printf("%vb: **** Error: %q ****\n", name, err)
 	} else {
@@ -79,10 +87,212 @@ func a(pipeMap [][]*pipe, verbose bool) (int, error) {
 	return retValue, nil
 }
 
-func b(verbose bool) (int, error) {
+func b(pipeMap [][]*pipe, verbose bool) (int, error) {
 	retValue := 0
 
+	//calcOutside(pipeMap, verbose)
+
+	column := findVerticalPosAdjust(pipeMap)
+	for column != -1 {
+		fmt.Printf("Found column %v\n", column)
+		insertColumn(pipeMap, column)
+		column = findVerticalPosAdjust(pipeMap)
+	}
+
+	// row := findRowPosAdjust(pipeMap)
+	// for row != -1 {
+	// 	fmt.Printf("Found row %v\n", row)
+	// 	insertRow(pipeMap, row)
+	// 	row = findRowPosAdjust(pipeMap)
+	// }
+
+	printMap(pipeMap)
+
 	return retValue, fmt.Errorf("not implemented yet")
+}
+
+func insertColumn(pipeMap [][]*pipe, column int) {
+	fmt.Printf("Column: %v\n", column)
+	for y, pipeLine := range pipeMap {
+		westPipe, err := getPipe(pipeMap, pipeLine[column].position, WEST)
+		if err != nil {
+			westPipe = nil
+		}
+		eastPipe := pipeLine[column]
+		newPipe, _ := getNewPipe('.')
+		if westPipe.directions[EAST] && eastPipe.directions[WEST] {
+			newPipe, _ = getNewPipe('-')
+			westPipe.pipes[EAST] = newPipe
+			eastPipe.pipes[WEST] = newPipe
+			newPipe.pipes[EAST] = eastPipe
+			newPipe.pipes[WEST] = westPipe
+		}
+		newPipe.position.y = y
+		newPipe.position.x = column
+		newPipe.virtualNode = true
+
+		pipeLine = append(pipeLine[:column+1], pipeLine[column:]...)
+		pipeLine[column] = newPipe
+
+		for i, pipeNode := range pipeLine {
+			pipeNode.position.x = i
+		}
+
+		pipeMap[y] = pipeLine
+
+	}
+}
+
+func insertRow(pipeMap [][]*pipe, row int) {
+	fmt.Printf("Column: %v\n", row)
+
+	// Needs to be written
+
+	// for y, pipeLine := range pipeMap {
+	// 	westPipe, err := getPipe(pipeMap, pipeLine[column].position, WEST)
+	// 	if err != nil {
+	// 		westPipe = nil
+	// 	}
+	// 	eastPipe := pipeLine[column]
+	// 	newPipe, _ := getNewPipe('.')
+	// 	if westPipe.directions[EAST] && eastPipe.directions[WEST] {
+	// 		newPipe, _ = getNewPipe('-')
+	// 		westPipe.pipes[EAST] = newPipe
+	// 		eastPipe.pipes[WEST] = newPipe
+	// 		newPipe.pipes[EAST] = eastPipe
+	// 		newPipe.pipes[WEST] = westPipe
+	// 	}
+	// 	newPipe.position.y = y
+	// 	newPipe.position.x = column
+	// 	newPipe.virtualNode = true
+
+	// 	pipeLine = append(pipeLine[:column+1], pipeLine[column:]...)
+	// 	pipeLine[column] = newPipe
+
+	// 	for i, pipeNode := range pipeLine {
+	// 		pipeNode.position.x = i
+	// 	}
+
+	// 	pipeMap[y] = pipeLine
+
+	// }
+}
+
+func findVerticalPosAdjust(pipeMap [][]*pipe) int {
+	for _, pipeLine := range pipeMap {
+		for _, pipeNode := range pipeLine {
+			if pipeNode.symbol != '.' {
+				if pipeNode.position.x == 0 && !pipeNode.directions[WEST] {
+					fmt.Printf("HERE1\n")
+					return pipeNode.position.x
+				} else if pipeNode.position.x == len(pipeLine)-1 && !pipeNode.directions[EAST] {
+					fmt.Printf("HERE2\n%v - %v\n", len(pipeLine), pipeNode)
+					return pipeNode.position.x + 1
+				} else {
+					eastPipe, err := getPipe(pipeMap, pipeNode.position, EAST)
+					if err != nil || (eastPipe.symbol != '.' && (!pipeNode.directions[EAST] || !eastPipe.directions[WEST])) {
+						fmt.Printf("HERE3\n")
+						return pipeNode.position.x + 1
+					}
+				}
+			}
+		}
+	}
+
+	return -1
+}
+
+func findRowPosAdjust(pipeMap [][]*pipe) int {
+	for _, pipeLine := range pipeMap {
+		for _, pipeNode := range pipeLine {
+			if pipeNode.symbol != '.' {
+				if pipeNode.position.y == 0 && !pipeNode.directions[NORTH] {
+					return pipeNode.position.y
+				} else if pipeNode.position.y == len(pipeMap)-1 && !pipeNode.directions[SOUTH] {
+					return pipeNode.position.y + 1
+				} else {
+					southPipe, err := getPipe(pipeMap, pipeNode.position, SOUTH)
+					if err != nil || (southPipe.symbol != '.' && (!pipeNode.directions[SOUTH] || !southPipe.directions[NORTH])) {
+						return pipeNode.position.y + 1
+					}
+				}
+			}
+		}
+	}
+
+	return -1
+}
+
+func calcOutside(pipeMap [][]*pipe, verbose bool) {
+	firstLine := pipeMap[0]
+	for _, pipeNode := range firstLine {
+		setOutside(pipeMap, pipeNode.position, verbose)
+	}
+
+	for i := 1; i < len(pipeMap)-1; i++ {
+		pipeLine := pipeMap[i]
+		// first value
+		pipeNode := pipeLine[0]
+		setOutside(pipeMap, pipeNode.position, verbose)
+		// last value
+		pipeNode = pipeLine[len(pipeLine)-1]
+		setOutside(pipeMap, pipeNode.position, verbose)
+	}
+
+	lastLine := pipeMap[len(pipeMap)-1]
+	for _, pipeNode := range lastLine {
+		setOutside(pipeMap, pipeNode.position, verbose)
+	}
+}
+
+func setOutside(pipeMap [][]*pipe, pos coord, verbose bool) {
+	pipeNode := pipeMap[pos.y][pos.x]
+
+	/* Nothing to do */
+	if pipeNode.symbol != '.' || pipeNode.insideOut != NOT_SET {
+		return
+	}
+
+	pipeNode.insideOut = OUTSIDE
+
+	if verbose {
+		printMap(pipeMap)
+	}
+
+	nextCoord, err := getCoordAdv(pipeMap, pos, NORTH)
+	if err == nil {
+		setOutside(pipeMap, nextCoord, verbose)
+	}
+	nextCoord, err = getCoordAdv(pipeMap, pos, EAST)
+	if err == nil {
+		setOutside(pipeMap, nextCoord, verbose)
+	}
+	nextCoord, err = getCoordAdv(pipeMap, pos, SOUTH)
+	if err == nil {
+		setOutside(pipeMap, nextCoord, verbose)
+	}
+	nextCoord, err = getCoordAdv(pipeMap, pos, WEST)
+	if err == nil {
+		setOutside(pipeMap, nextCoord, verbose)
+	}
+}
+
+func getCoordAdv(pipeMap [][]*pipe, pos coord, direction int) (coord, error) {
+	maxY := len(pipeMap)
+	maxX := len(pipeMap[0])
+
+	loop := true
+	retCoord := pos
+	var err error
+	for loop {
+		retCoord, err = getCoord(retCoord, direction, maxX, maxY)
+		if err != nil {
+			return retCoord, err
+		}
+		loop = false
+	}
+
+	return retCoord, nil
 }
 
 func readInput() ([][]*pipe, *pipe, error) {
@@ -249,7 +459,9 @@ func getNewPipe(symbol byte) (*pipe, error) {
 			x: -1,
 			y: -1,
 		},
-		distance: -1,
+		distance:    -1,
+		insideOut:   NOT_SET,
+		virtualNode: false,
 	}
 	switch symbol {
 	case '|':
@@ -290,13 +502,26 @@ func getNewPipe(symbol byte) (*pipe, error) {
 func printMap(pipeMap [][]*pipe) {
 	for _, line := range pipeMap {
 		for _, pipeNode := range line {
-			fmt.Printf("%c", pipeNode.symbol)
+			//if !pipeNode.virtualNode {
+			if pipeNode.symbol == '.' {
+				switch pipeNode.insideOut {
+				case INSIDE:
+					fmt.Printf("%c", 'I')
+				case OUTSIDE:
+					fmt.Printf("%c", 'O')
+				default:
+					fmt.Printf("%c", '?')
+				}
+			} else {
+				fmt.Printf("%c", pipeNode.symbol)
+			}
 			//fmt.Printf("(%d,%d) ", pipeNode.position.x, pipeNode.position.y)
 			// if pipeNode.distance == -1 {
 			// 	fmt.Printf(". ")
 			// } else {
 			// 	fmt.Printf("%v ", pipeNode.distance)
 			// }
+			//}
 		}
 		fmt.Printf("\n")
 	}
