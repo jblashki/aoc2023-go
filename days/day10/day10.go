@@ -23,6 +23,22 @@ const (
 	OUTSIDE = iota
 )
 
+const (
+	MAP                           = iota // Map Symbols
+	MAP_NO_JUNK                   = iota // Map Symbols
+	MAP_NO_JUNK_WITH_VIRT         = iota // Map Symbols
+	MAP_COORDS                    = iota // Map Coordinates
+	MAP_WITH_VIRT                 = iota // Map Symbols with virtual nodes included
+	MAP_WITH_VIRT_DIFF            = iota // Map Symbols with virtual nodes included (different symbols for virt empty space)
+	INSIDE_OUTSIDE                = iota // Map Symbols / Showing inside out
+	INSIDE_OUTSIDE_WITH_VIRT      = iota // Map Symbols / Showing inside out with virtual nodes included
+	INSIDE_OUTSIDE_ONLY           = iota // Map Symbols / Showing inside out
+	INSIDE_OUTSIDE_ONLY_WITH_VIRT = iota // Map Symbols / Showing inside out
+	INSIDE_OUTSIDE_WITH_VIRT_DIFF = iota // Map Symbols / Showing inside out with virtual nodes included (different symbols for virt empty space)
+	DISTANCE                      = iota
+	DISTANCE_WITH_VIRT            = iota
+)
+
 type coord struct {
 	x int
 	y int
@@ -37,6 +53,7 @@ type pipe struct {
 	distance    int
 	insideOut   int
 	virtualNode bool
+	partOfLoop  bool
 }
 
 // RunDay runs Advent of Code Day 8 Puzzle
@@ -56,7 +73,7 @@ func RunDay(verbose bool) {
 	}
 
 	if verbose {
-		printMap(pipeMap)
+		printMap(pipeMap, MAP)
 	}
 
 	aResult, err = a(pipeMap, verbose)
@@ -90,92 +107,132 @@ func a(pipeMap [][]*pipe, verbose bool) (int, error) {
 func b(pipeMap [][]*pipe, verbose bool) (int, error) {
 	retValue := 0
 
-	//calcOutside(pipeMap, verbose)
-
 	column := findVerticalPosAdjust(pipeMap)
 	for column != -1 {
-		fmt.Printf("Found column %v\n", column)
 		insertColumn(pipeMap, column)
 		column = findVerticalPosAdjust(pipeMap)
 	}
 
-	// row := findRowPosAdjust(pipeMap)
-	// for row != -1 {
-	// 	fmt.Printf("Found row %v\n", row)
-	// 	insertRow(pipeMap, row)
-	// 	row = findRowPosAdjust(pipeMap)
-	// }
+	row := findRowPosAdjust(pipeMap)
+	for row != -1 {
+		pipeMap = insertRow(pipeMap, row)
+		row = findRowPosAdjust(pipeMap)
+	}
 
-	printMap(pipeMap)
+	calcOutside(pipeMap, verbose)
 
-	return retValue, fmt.Errorf("not implemented yet")
+	if verbose {
+		printMap(pipeMap, MAP_COORDS)
+		printMap(pipeMap, MAP)
+		printMap(pipeMap, MAP_WITH_VIRT)
+		printMap(pipeMap, MAP_WITH_VIRT_DIFF)
+		printMap(pipeMap, INSIDE_OUTSIDE)
+		printMap(pipeMap, INSIDE_OUTSIDE_WITH_VIRT)
+		printMap(pipeMap, INSIDE_OUTSIDE_WITH_VIRT_DIFF)
+		printMap(pipeMap, DISTANCE)
+		printMap(pipeMap, DISTANCE_WITH_VIRT)
+		printMap(pipeMap, MAP_NO_JUNK)
+		printMap(pipeMap, MAP_NO_JUNK_WITH_VIRT)
+	}
+
+	for _, pipeLine := range pipeMap {
+		for _, pipeNode := range pipeLine {
+			if !pipeNode.virtualNode && pipeNode.insideOut == INSIDE {
+				retValue++
+			}
+		}
+	}
+
+	return retValue, nil
 }
 
 func insertColumn(pipeMap [][]*pipe, column int) {
-	fmt.Printf("Column: %v\n", column)
 	for y, pipeLine := range pipeMap {
-		westPipe, err := getPipe(pipeMap, pipeLine[column].position, WEST)
-		if err != nil {
-			westPipe = nil
-		}
-		eastPipe := pipeLine[column]
-		newPipe, _ := getNewPipe('.')
-		if westPipe.directions[EAST] && eastPipe.directions[WEST] {
-			newPipe, _ = getNewPipe('-')
-			westPipe.pipes[EAST] = newPipe
-			eastPipe.pipes[WEST] = newPipe
-			newPipe.pipes[EAST] = eastPipe
-			newPipe.pipes[WEST] = westPipe
-		}
-		newPipe.position.y = y
-		newPipe.position.x = column
-		newPipe.virtualNode = true
+		if column >= len(pipeLine) {
+			newPipe, _ := getNewPipe('.')
+			newPipe.position.y = y
+			newPipe.position.x = column
+			newPipe.virtualNode = true
+			pipeLine = append(pipeLine, newPipe)
+		} else {
 
-		pipeLine = append(pipeLine[:column+1], pipeLine[column:]...)
-		pipeLine[column] = newPipe
+			westPipe, err := getPipe(pipeMap, pipeLine[column].position, WEST)
+			if err != nil {
+				westPipe = nil
+			}
+			eastPipe := pipeLine[column]
+			newPipe, _ := getNewPipe('.')
+			if westPipe != nil && eastPipe != nil && westPipe.directions[EAST] && eastPipe.directions[WEST] {
+				newPipe, _ = getNewPipe('-')
+				westPipe.pipes[EAST] = newPipe
+				eastPipe.pipes[WEST] = newPipe
+				newPipe.pipes[EAST] = eastPipe
+				newPipe.pipes[WEST] = westPipe
+				newPipe.distance = min(westPipe.distance, eastPipe.distance)
+			}
+			newPipe.position.y = y
+			newPipe.position.x = column
+			newPipe.virtualNode = true
 
-		for i, pipeNode := range pipeLine {
-			pipeNode.position.x = i
+			pipeLine = append(pipeLine[:column+1], pipeLine[column:]...)
+			pipeLine[column] = newPipe
+
+			for i, pipeNode := range pipeLine {
+				pipeNode.position.x = i
+			}
 		}
 
 		pipeMap[y] = pipeLine
-
 	}
 }
 
-func insertRow(pipeMap [][]*pipe, row int) {
-	fmt.Printf("Column: %v\n", row)
+func insertRow(pipeMap [][]*pipe, row int) [][]*pipe {
+	var prevRow []*pipe = nil
+	var nextRow []*pipe = nil
+	if row != 0 {
+		prevRow = pipeMap[row-1]
+	}
 
-	// Needs to be written
+	if row < len(pipeMap) {
+		nextRow = pipeMap[row]
+	}
 
-	// for y, pipeLine := range pipeMap {
-	// 	westPipe, err := getPipe(pipeMap, pipeLine[column].position, WEST)
-	// 	if err != nil {
-	// 		westPipe = nil
-	// 	}
-	// 	eastPipe := pipeLine[column]
-	// 	newPipe, _ := getNewPipe('.')
-	// 	if westPipe.directions[EAST] && eastPipe.directions[WEST] {
-	// 		newPipe, _ = getNewPipe('-')
-	// 		westPipe.pipes[EAST] = newPipe
-	// 		eastPipe.pipes[WEST] = newPipe
-	// 		newPipe.pipes[EAST] = eastPipe
-	// 		newPipe.pipes[WEST] = westPipe
-	// 	}
-	// 	newPipe.position.y = y
-	// 	newPipe.position.x = column
-	// 	newPipe.virtualNode = true
+	pipeCount := 0
+	if prevRow != nil {
+		pipeCount = len(prevRow)
+	} else {
+		pipeCount = len(nextRow)
+	}
 
-	// 	pipeLine = append(pipeLine[:column+1], pipeLine[column:]...)
-	// 	pipeLine[column] = newPipe
+	newRow := make([]*pipe, 0)
+	for i := 0; i < pipeCount; i++ {
+		newPipe, _ := getNewPipe('.')
+		if prevRow != nil && nextRow != nil && prevRow[i].directions[SOUTH] && nextRow[i].directions[NORTH] {
+			newPipe, _ = getNewPipe('|')
+			prevRow[i].pipes[SOUTH] = newPipe
+			nextRow[i].pipes[NORTH] = newPipe
+			newPipe.pipes[NORTH] = prevRow[i]
+			newPipe.pipes[SOUTH] = nextRow[i]
+			newPipe.distance = min(prevRow[i].distance, nextRow[i].distance)
+		}
+		newPipe.position.x = i
+		newPipe.position.y = row
+		newPipe.virtualNode = true
 
-	// 	for i, pipeNode := range pipeLine {
-	// 		pipeNode.position.x = i
-	// 	}
+		newRow = append(newRow, newPipe)
+	}
 
-	// 	pipeMap[y] = pipeLine
+	pipeMap = append(pipeMap[:row+1], pipeMap[row:]...)
+	pipeMap[row] = newRow
 
-	// }
+	for y, pipeLine := range pipeMap {
+		for x, pipeNode := range pipeLine {
+			pipeNode.position.x = x
+			pipeNode.position.y = y
+		}
+	}
+
+	return pipeMap
 }
 
 func findVerticalPosAdjust(pipeMap [][]*pipe) int {
@@ -183,15 +240,12 @@ func findVerticalPosAdjust(pipeMap [][]*pipe) int {
 		for _, pipeNode := range pipeLine {
 			if pipeNode.symbol != '.' {
 				if pipeNode.position.x == 0 && !pipeNode.directions[WEST] {
-					fmt.Printf("HERE1\n")
 					return pipeNode.position.x
 				} else if pipeNode.position.x == len(pipeLine)-1 && !pipeNode.directions[EAST] {
-					fmt.Printf("HERE2\n%v - %v\n", len(pipeLine), pipeNode)
 					return pipeNode.position.x + 1
 				} else {
 					eastPipe, err := getPipe(pipeMap, pipeNode.position, EAST)
 					if err != nil || (eastPipe.symbol != '.' && (!pipeNode.directions[EAST] || !eastPipe.directions[WEST])) {
-						fmt.Printf("HERE3\n")
 						return pipeNode.position.x + 1
 					}
 				}
@@ -243,20 +297,28 @@ func calcOutside(pipeMap [][]*pipe, verbose bool) {
 	for _, pipeNode := range lastLine {
 		setOutside(pipeMap, pipeNode.position, verbose)
 	}
+
+	for _, pipeLine := range pipeMap {
+		for _, pipeNode := range pipeLine {
+			if pipeNode.distance == -1 && pipeNode.insideOut == NOT_SET {
+				pipeNode.insideOut = INSIDE
+			}
+		}
+	}
 }
 
 func setOutside(pipeMap [][]*pipe, pos coord, verbose bool) {
 	pipeNode := pipeMap[pos.y][pos.x]
 
 	/* Nothing to do */
-	if pipeNode.symbol != '.' || pipeNode.insideOut != NOT_SET {
+	if pipeNode.distance != -1 || pipeNode.insideOut != NOT_SET {
 		return
 	}
 
 	pipeNode.insideOut = OUTSIDE
 
 	if verbose {
-		printMap(pipeMap)
+		printMap(pipeMap, INSIDE_OUTSIDE)
 	}
 
 	nextCoord, err := getCoordAdv(pipeMap, pos, NORTH)
@@ -462,6 +524,7 @@ func getNewPipe(symbol byte) (*pipe, error) {
 		distance:    -1,
 		insideOut:   NOT_SET,
 		virtualNode: false,
+		partOfLoop:  false,
 	}
 	switch symbol {
 	case '|':
@@ -499,32 +562,207 @@ func getNewPipe(symbol byte) (*pipe, error) {
 	return &retValue, nil
 }
 
-func printMap(pipeMap [][]*pipe) {
-	for _, line := range pipeMap {
-		for _, pipeNode := range line {
-			//if !pipeNode.virtualNode {
-			if pipeNode.symbol == '.' {
-				switch pipeNode.insideOut {
-				case INSIDE:
-					fmt.Printf("%c", 'I')
-				case OUTSIDE:
-					fmt.Printf("%c", 'O')
-				default:
-					fmt.Printf("%c", '?')
-				}
-			} else {
-				fmt.Printf("%c", pipeNode.symbol)
-			}
-			//fmt.Printf("(%d,%d) ", pipeNode.position.x, pipeNode.position.y)
-			// if pipeNode.distance == -1 {
-			// 	fmt.Printf(". ")
-			// } else {
-			// 	fmt.Printf("%v ", pipeNode.distance)
-			// }
-			//}
-		}
-		fmt.Printf("\n")
+func printMap(pipeMap [][]*pipe, mapType int) {
+	fmt.Printf("-----\n")
+	switch mapType {
+	case MAP:
+		fmt.Printf("MAP\n")
+	case MAP_NO_JUNK:
+		fmt.Printf("MAP NO JUNK\n")
+	case MAP_NO_JUNK_WITH_VIRT:
+		fmt.Printf("MAP NO JUNK WITH VIRT\n")
+	case MAP_COORDS:
+		fmt.Printf("COORDS\n")
+	case MAP_WITH_VIRT:
+		fmt.Printf("VIRT MAP\n")
+	case MAP_WITH_VIRT_DIFF:
+		fmt.Printf("VIRT MAP WITH DIFF\n")
+	case INSIDE_OUTSIDE:
+		fmt.Printf("INSIDE OUTSIDE\n")
+	case INSIDE_OUTSIDE_WITH_VIRT:
+		fmt.Printf("VIRT INSIDE OUTSIDE\n")
+	case INSIDE_OUTSIDE_ONLY:
+		fmt.Printf("INSIDE OUTSIDE ONLY\n")
+	case INSIDE_OUTSIDE_ONLY_WITH_VIRT:
+		fmt.Printf("VIRT INSIDE OUTSIDE ONLY\n")
+	case INSIDE_OUTSIDE_WITH_VIRT_DIFF:
+		fmt.Printf("VIRT INSIDE OUTSIDE WITH DIFF\n")
+	case DISTANCE:
+		fmt.Printf("DISTANCE\n")
+	case DISTANCE_WITH_VIRT:
+		fmt.Printf("DISTANCE WITH VIRT\n")
 	}
+	fmt.Printf("-----\n")
+	for _, line := range pipeMap {
+		printedSomething := false
+		for _, pipeNode := range line {
+			switch mapType {
+			case DISTANCE:
+				if !pipeNode.virtualNode {
+					if pipeNode.distance != -1 {
+						fmt.Printf("%02d ", pipeNode.distance)
+					} else {
+						fmt.Printf(".. ")
+					}
+					printedSomething = true
+				}
+			case DISTANCE_WITH_VIRT:
+				if pipeNode.distance != -1 {
+					fmt.Printf("%02d ", pipeNode.distance)
+				} else {
+					fmt.Printf(".. ")
+				}
+				printedSomething = true
+			case MAP_COORDS:
+				if !pipeNode.virtualNode {
+					fmt.Printf("(%02d, %02d) ", pipeNode.position.x, pipeNode.position.y)
+					printedSomething = true
+				}
+			case MAP_WITH_VIRT:
+				fmt.Printf("%c", pipeNode.symbol)
+				printedSomething = true
+			case MAP_WITH_VIRT_DIFF:
+				if pipeNode.virtualNode && pipeNode.symbol == '.' {
+					fmt.Printf("%c", ',')
+					printedSomething = true
+				} else {
+					fmt.Printf("%c", pipeNode.symbol)
+					printedSomething = true
+				}
+			case INSIDE_OUTSIDE:
+				if !pipeNode.virtualNode {
+					if pipeNode.distance == -1 {
+						switch pipeNode.insideOut {
+						case INSIDE:
+							fmt.Printf("%c", 'I')
+							printedSomething = true
+						case OUTSIDE:
+							fmt.Printf("%c", 'O')
+							printedSomething = true
+						default:
+							fmt.Printf("%c", '?')
+							printedSomething = true
+						}
+					} else {
+						fmt.Printf("%c", pipeNode.symbol)
+						printedSomething = true
+					}
+				}
+			case INSIDE_OUTSIDE_WITH_VIRT:
+				if pipeNode.distance == -1 {
+					switch pipeNode.insideOut {
+					case INSIDE:
+						fmt.Printf("%c", 'I')
+						printedSomething = true
+					case OUTSIDE:
+						fmt.Printf("%c", 'O')
+						printedSomething = true
+					default:
+						fmt.Printf("%c", '?')
+						printedSomething = true
+					}
+				} else {
+					fmt.Printf("%c", pipeNode.symbol)
+					printedSomething = true
+				}
+			case INSIDE_OUTSIDE_ONLY:
+				if !pipeNode.virtualNode {
+					if pipeNode.distance == -1 {
+						switch pipeNode.insideOut {
+						case INSIDE:
+							fmt.Printf("%c", 'I')
+							printedSomething = true
+						case OUTSIDE:
+							fmt.Printf("%c", 'O')
+							printedSomething = true
+						default:
+							fmt.Printf("%c", '?')
+							printedSomething = true
+						}
+					} else {
+						fmt.Printf("%c", ' ')
+						printedSomething = true
+					}
+				}
+			case INSIDE_OUTSIDE_ONLY_WITH_VIRT:
+				if pipeNode.distance == -1 {
+					switch pipeNode.insideOut {
+					case INSIDE:
+						fmt.Printf("%c", 'I')
+						printedSomething = true
+					case OUTSIDE:
+						fmt.Printf("%c", 'O')
+						printedSomething = true
+					default:
+						fmt.Printf("%c", '?')
+						printedSomething = true
+					}
+				} else {
+					fmt.Printf("%c", ' ')
+					printedSomething = true
+				}
+			case INSIDE_OUTSIDE_WITH_VIRT_DIFF:
+				if pipeNode.distance == -1 {
+					switch pipeNode.insideOut {
+					case INSIDE:
+						if pipeNode.virtualNode {
+							fmt.Printf("%c", 'i')
+							printedSomething = true
+						} else {
+							fmt.Printf("%c", 'I')
+							printedSomething = true
+						}
+					case OUTSIDE:
+						if pipeNode.virtualNode {
+							fmt.Printf("%c", 'o')
+							printedSomething = true
+						} else {
+							fmt.Printf("%c", 'O')
+							printedSomething = true
+						}
+					default:
+						if pipeNode.virtualNode {
+							fmt.Printf("%c", '.')
+							printedSomething = true
+						} else {
+							fmt.Printf("%c", '?')
+							printedSomething = true
+						}
+					}
+				} else {
+					fmt.Printf("%c", pipeNode.symbol)
+					printedSomething = true
+				}
+			case MAP_NO_JUNK:
+				if !pipeNode.virtualNode {
+					if pipeNode.distance == -1 {
+						fmt.Printf("%c", '.')
+					} else {
+						fmt.Printf("%c", pipeNode.symbol)
+					}
+					printedSomething = true
+				}
+			case MAP_NO_JUNK_WITH_VIRT:
+				if pipeNode.distance == -1 {
+					fmt.Printf("%c", '.')
+				} else {
+					fmt.Printf("%c", pipeNode.symbol)
+				}
+				printedSomething = true
+			case MAP:
+				fallthrough
+			default:
+				if !pipeNode.virtualNode {
+					fmt.Printf("%c", pipeNode.symbol)
+					printedSomething = true
+				}
+			}
+		}
+		if printedSomething {
+			fmt.Printf("\n")
+		}
+	}
+	fmt.Printf("-----\n")
 }
 
 func getPipe(pipeMap [][]*pipe, currentPos coord, direction int) (*pipe, error) {
