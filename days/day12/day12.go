@@ -24,6 +24,8 @@ type springLine struct {
 	damagedGroups []int
 }
 
+var resultMap map[string]int
+
 // RunDay runs Advent of Code Day 12 Puzzle
 func RunDay(verbose bool) {
 	var aResult int
@@ -33,6 +35,8 @@ func RunDay(verbose bool) {
 	if verbose {
 		fmt.Printf("\n%v Output:\n", name)
 	}
+
+	resultMap = make(map[string]int)
 
 	springLines, err := readInput()
 	if err != nil {
@@ -56,9 +60,8 @@ func RunDay(verbose bool) {
 
 func getCount(springLines []springLine, verbose bool) (int, error) {
 	retValue := 0
-	for i, springLineDetail := range springLines {
+	for _, springLineDetail := range springLines {
 		newValue := getValidComb(springLineDetail.springs, springLineDetail.damagedGroups)
-		fmt.Printf("Line %d: %s - %d\n", i+1, springLineDetail.springs, newValue)
 		retValue += newValue
 
 	}
@@ -77,9 +80,7 @@ func a(springLines []springLine, verbose bool) (int, error) {
 
 func b(springLines []springLine, verbose bool) (int, error) {
 	retValue := 0
-	//printSpringLines(springLines)
 	for i, sl := range springLines {
-		//fmt.Printf("Line %d\n", i)
 		newSprings := make([]byte, 0)
 		for j := 0; j < 5; j++ {
 			if j >= 1 {
@@ -97,7 +98,6 @@ func b(springLines []springLine, verbose bool) (int, error) {
 
 		newMissing := make([]int, 0)
 		for j, spring := range sl.springs {
-			//sl.springs = append(sl.springs, byte(spring))
 			if byte(spring) == UNKNOWN {
 				newMissing = append(newMissing, j)
 			}
@@ -105,8 +105,6 @@ func b(springLines []springLine, verbose bool) (int, error) {
 		sl.missing = newMissing
 		springLines[i] = sl
 	}
-
-	//printSpringLines(springLines)
 
 	retValue, err := getCount(springLines, verbose)
 	if err != nil {
@@ -163,100 +161,42 @@ func printSprintLine(line int, sl springLine) {
 func printSpringLines(springLines []springLine) {
 	for i, sl := range springLines {
 		printSprintLine(i, sl)
-
 	}
 }
 
-// const (
-// 	BITMASK = 0x01
-// )
-
-// func getBitArray(value int, arrayLen int) []bool {
-// 	retArray := make([]bool, arrayLen)
-
-// 	for i := 0; i < arrayLen; i++ {
-// 		bit := (value >> i) & BITMASK
-// 		if bit == BITMASK {
-// 			retArray[i] = true
-// 		}
-// 	}
-
-// 	return retArray
-// }
-
-// func getSprings(springLineDetail springLine, value int) []byte {
-// 	retArray := append([]byte(nil), springLineDetail.springs...)
-// 	bitArrayLen := len(springLineDetail.missing)
-// 	bitArray := getBitArray(value, bitArrayLen)
-// 	for i, bit := range bitArray {
-// 		pos := springLineDetail.missing[i]
-// 		if bit {
-// 			retArray[pos] = OPERATIONAL
-// 		} else {
-// 			retArray[pos] = DAMAGED
-// 		}
-// 	}
-// 	return retArray
-// }
-
-// func getGroups(springs []byte) []int {
-// 	retArray := make([]int, 0)
-
-// 	inGroup := false
-// 	curGroup := -1
-// 	curCount := 0
-// 	for i := 0; i < len(springs); i++ {
-// 		if springs[i] == DAMAGED {
-// 			if !inGroup {
-// 				curGroup++
-// 				inGroup = true
-// 			}
-// 			curCount++
-// 		} else {
-// 			if inGroup {
-// 				retArray = append(retArray, curCount)
-// 			}
-// 			inGroup = false
-// 			curCount = 0
-// 		}
-// 	}
-// 	if inGroup {
-// 		retArray = append(retArray, curCount)
-// 	}
-// 	return retArray
-// }
-
-// func IntArrayEquals(a []int, b []int) bool {
-// 	if len(a) != len(b) {
-// 		return false
-// 	}
-// 	for i, v := range a {
-// 		if v != b[i] {
-// 			return false
-// 		}
-// 	}
-// 	return true
-// }
+func getKey(springs []byte, damagedGroups []int) string {
+	return fmt.Sprintf("%s|%v", springs, damagedGroups)
+}
 
 func getValidComb(springs []byte, damagedGroups []int) int {
-	//fmt.Printf("%s -> %v\n", springs, damagedGroups)
+	key := getKey(springs, damagedGroups)
+
+	retValue, ok := resultMap[key]
+	if ok {
+		return retValue
+	}
+
 	if len(damagedGroups) == 0 {
 		if contains(springs, DAMAGED) {
-			return 0
+			retValue = 0
 		} else {
-			return 1
+			retValue = 1
 		}
+		resultMap[key] = retValue
+		return retValue
 	}
 
 	if len(springs) == 0 {
 		if len(damagedGroups) == 0 {
-			return 1
+			retValue = 1
 		} else {
-			return 0
+			retValue = 0
 		}
+		resultMap[key] = retValue
+		return retValue
 	}
 
-	retValue := 0
+	retValue = 0
 
 	if springs[0] == OPERATIONAL || springs[0] == UNKNOWN {
 		retValue += getValidComb(springs[1:], damagedGroups)
@@ -272,6 +212,7 @@ func getValidComb(springs []byte, damagedGroups []int) int {
 		}
 	}
 
+	resultMap[key] = retValue
 	return retValue
 }
 
