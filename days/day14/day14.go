@@ -69,12 +69,12 @@ func a(m [][]int, verbose bool) (int, error) {
 }
 
 func b(m [][]int, verbose bool) (int, error) {
-
 	key := getKey(m)
 	cycles[key]++
 	i := 0
 	firstRepeat := -1
-	for i = 0; i < 3004; i++ {
+	loop := true
+	for loop {
 		m = tip(m, NORTH, verbose)
 		m = tip(m, WEST, verbose)
 		m = tip(m, SOUTH, verbose)
@@ -84,38 +84,27 @@ func b(m [][]int, verbose bool) (int, error) {
 		mcopy := copyMap(m)
 		states[i] = mcopy
 		if found {
-			if count == 3 {
-				break
-			}
 			if firstRepeat == -1 {
 				firstRepeat = i
 			}
-			//fmt.Printf("Found repeat @ %d\n", i)
+		}
+		if count != 3 {
+			cycles[key]++
+			i++
+		} else {
+			loop = false
 		}
 
-		cycles[key]++
 	}
 
-	num := 1000000000
+	num := 1000000000 - 1
 	num -= firstRepeat
 	num %= i - firstRepeat
 	num += firstRepeat
 
-	fmt.Printf("%d - %d - %d - num = %d\n", firstRepeat, i, i-firstRepeat, num)
-
 	newMap := states[num]
-	printMap(newMap)
 
-	newLoad := calcLoad(newMap, verbose)
-	fmt.Printf("%d\n", newLoad)
-
-	// for _, count := range cycles {
-	// 	fmt.Printf("%v\n", count)
-	// }
-
-	//printMap(m)
-
-	return calcLoad(m, verbose), nil
+	return calcLoad(newMap, verbose), nil
 }
 
 func readInput(verbose bool) ([][]int, error) {
