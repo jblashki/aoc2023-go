@@ -14,6 +14,7 @@ import (
 	"aoc2023/days/day12"
 	"aoc2023/days/day13"
 	"aoc2023/days/day14"
+	"aoc2023/days/day15"
 	"aoc2023/days/day2"
 	"aoc2023/days/day3"
 	"aoc2023/days/day4"
@@ -39,6 +40,7 @@ var argCalls = map[string]func(bool){
 	"DAY12": day12.RunDay,
 	"DAY13": day13.RunDay,
 	"DAY14": day14.RunDay,
+	"DAY15": day15.RunDay,
 }
 
 var functionPointers = []func(bool){
@@ -56,6 +58,7 @@ var functionPointers = []func(bool){
 	day12.RunDay,
 	day13.RunDay,
 	day14.RunDay,
+	day15.RunDay,
 }
 
 var programName = ""

@@ -27,7 +27,7 @@ var cycles map[string]int
 
 var states map[int][][]int
 
-// RunDay runs Advent of Code Day 13 Puzzle
+// RunDay runs Advent of Code Day 14 Puzzle
 func RunDay(verbose bool) {
 	var aResult int
 	var bResult int
