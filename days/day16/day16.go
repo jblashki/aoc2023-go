@@ -2,9 +2,11 @@ package day16
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"time"
 
+	"github.com/gdamore/tcell/v2"
 	filereader "github.com/jblashki/aoc-filereader-go"
 )
 
@@ -44,6 +46,13 @@ const (
 	JUST_LIGHT_MAP = iota
 )
 
+const (
+	LIGHT       = iota
+	MIRR        = iota
+	LIGHT_TRAIL = iota
+	OTHER       = iota
+)
+
 type mapCoord struct {
 	row int
 	col int
@@ -67,15 +76,11 @@ type lightMap struct {
 	lightBeams []lightBeamStuct
 }
 
-// RunDay runs Advent of Code Day 16 Puzzle
-func RunDay(verbose bool) {
+func Run(screen tcell.Screen, defStyle tcell.Style, verbose bool) {
 	var aResult int
 	var bResult int
-	var err error
-
-	if verbose {
-		fmt.Printf("\n%v Output:\n", name)
-	}
+	var erra error
+	var errb error
 
 	lmap, err := readMap(verbose)
 	if err != nil {
@@ -83,17 +88,62 @@ func RunDay(verbose bool) {
 		os.Exit(1)
 	}
 
-	aResult, err = a(lmap, verbose)
-	if err != nil {
-		fmt.Printf("%va: **** Error: %q ****\n", name, err)
+	aResult, erra = a(lmap, screen, defStyle, verbose)
+	bResult, errb = b(verbose)
+	screen.Clear()
+	if erra != nil {
+		output := fmt.Sprintf("%va: **** Error: %q ****", name, erra)
+		screen.SetContent(0, 0, ' ', []rune(output), defStyle)
 	} else {
-		fmt.Printf("%va: Answer = %v\n", name, aResult)
+		output := fmt.Sprintf("%va: Answer = %v", name, aResult)
+		screen.SetContent(0, 0, ' ', []rune(output), defStyle)
 	}
-	bResult, err = b(verbose)
-	if err != nil {
-		fmt.Printf("%vb: **** Error: %q ****\n", name, err)
+	if errb != nil {
+		output := fmt.Sprintf("%vb: **** Error: %q ****", name, errb)
+		screen.SetContent(0, 1, ' ', []rune(output), defStyle)
 	} else {
-		fmt.Printf("%vb: Answer = %v\n", name, bResult)
+		output := fmt.Sprintf("%vb: Answer = %v", name, bResult)
+		screen.SetContent(0, 1, ' ', []rune(output), defStyle)
+	}
+	screen.SetContent(0, 2, ' ', []rune("[Press ESC to Continue]"), defStyle)
+	screen.Show()
+}
+
+// RunDay runs Advent of Code Day 16 Puzzle
+func RunDay(verbose bool) {
+
+	var err error
+
+	if verbose {
+		fmt.Printf("\n%v Output:\n", name)
+	}
+
+	screen, err := tcell.NewScreen()
+
+	if err != nil {
+		log.Fatalf("%+v", err)
+	}
+	if err := screen.Init(); err != nil {
+		log.Fatalf("%+v", err)
+	}
+
+	defStyle := tcell.StyleDefault.Background(tcell.ColorBlack).
+		Foreground(tcell.ColorWhite)
+	screen.SetStyle(defStyle)
+
+	go Run(screen, defStyle, verbose)
+
+	for {
+
+		switch event := screen.PollEvent().(type) {
+		case *tcell.EventResize:
+			screen.Sync()
+		case *tcell.EventKey:
+			if event.Key() == tcell.KeyEscape || event.Key() == tcell.KeyCtrlC {
+				screen.Fini()
+				os.Exit(0)
+			}
+		}
 	}
 }
 
@@ -175,11 +225,8 @@ func moveLight(lmap *lightMap) bool {
 	addBeam := make([]lightBeamStuct, 0)
 
 	for idx, lightBeam := range lmap.lightBeams {
-		//fmt.Printf("%d) %v\n", idx, lightBeam)
 		node := lmap.m[lightBeam.coord.row][lightBeam.coord.col]
-		// if node.pos.row == 14 && node.pos.col == 52 {
-		// 	fmt.Printf("HELLO\n")
-		// }
+
 		node.lightHist |= lightBeam.direction
 		if node.piece == SPLITTER {
 			if node.pieceDir&lightBeam.direction != lightBeam.direction {
@@ -242,24 +289,20 @@ func remove(slice []lightBeamStuct, idx int) []lightBeamStuct {
 	return append(slice[:idx], slice[idx+1:]...)
 }
 
-func a(lmap lightMap, verbose bool) (int, error) {
+func a(lmap lightMap, screen tcell.Screen, defStyle tcell.Style, verbose bool) (int, error) {
 	retValue := 0
 
 	lmap.lightBeams = append(lmap.lightBeams, lightBeamStuct{coord: mapCoord{row: 0, col: 0}, direction: EAST})
 
 	for moveLight(&lmap) {
 		if verbose {
-			fmt.Print("\033[H\033[2J")
-			printMap(lmap, LIGHT_MAP)
-			fmt.Println()
-			time.Sleep(10000000)
+			screen.Clear()
+			printMap(lmap, screen, defStyle, LIGHT_MAP)
+			time.Sleep(1000)
 		}
 	}
 	if verbose {
-		printMap(lmap, LIGHT_MAP)
-		fmt.Println()
-		printMap(lmap, JUST_LIGHT_MAP)
-		fmt.Println()
+		printMap(lmap, screen, defStyle, LIGHT_MAP)
 	}
 
 	retValue = countLight(lmap)
@@ -374,20 +417,25 @@ func getLightOnlyChar(node *mapNodeStruct) rune {
 	return '.'
 }
 
-func getLightChar(node *mapNodeStruct, lightBeams []lightBeamStuct) rune {
+func getLightChar(node *mapNodeStruct, lightBeams []lightBeamStuct) (rune, int) {
 	retValue := '.'
+	retType := OTHER
 
 	lightBeamID := getLightBeamId(node, lightBeams)
 	if lightBeamID >= 0 {
-		if lightBeamID > 9 {
-			retValue = (rune)('@') + (rune)(lightBeamID-9)
-		} else {
-			retValue = (rune)('0') + (rune)(lightBeamID)
-		}
+		// if lightBeamID > 9 {
+		// 	retValue = (rune)('@') + (rune)(lightBeamID-9)
+		// } else {
+		// 	retValue = (rune)('0') + (rune)(lightBeamID)
+		// }
+		retValue = '*'
+		retType = LIGHT
 	} else if node.piece == EMPTY {
 		if lightBeamID == -2 {
 			retValue = '*'
+			retType = LIGHT
 		} else if lightBeamID == -1 {
+			retType = LIGHT_TRAIL
 			switch node.lightHist {
 			case NORTH:
 				retValue = '^'
@@ -403,43 +451,67 @@ func getLightChar(node *mapNodeStruct, lightBeams []lightBeamStuct) rune {
 				retValue = '='
 			case 0:
 				retValue = '.'
+				retType = OTHER
 			default:
 				retValue = '+'
 			}
 		}
 	} else {
 		retValue = getPieceChar(node)
+		if retValue == '.' {
+			retType = OTHER
+		} else {
+			retType = MIRR
+		}
 	}
 
-	return retValue
+	return retValue, retType
 }
 
-func printMapNode(node *mapNodeStruct, lightBeams []lightBeamStuct, mapType int) {
-
+func printMapNode(node *mapNodeStruct, lightBeams []lightBeamStuct, screen tcell.Screen, defStyle tcell.Style, mapType int) {
+	lightStyle := tcell.StyleDefault.Background(tcell.ColorBlack).
+		Foreground(tcell.ColorYellow)
+	lightTrailStyle := tcell.StyleDefault.Background(tcell.ColorBlack).
+		Foreground(tcell.ColorLightYellow)
+	mirrortStyle := tcell.StyleDefault.Background(tcell.ColorBlack).
+		Foreground(tcell.ColorBlue)
+	otherStyle := tcell.StyleDefault.Background(tcell.ColorBlack).
+		Foreground(tcell.ColorBlack)
 	switch mapType {
 	case COORD_MAP:
 		fmt.Printf("(%d,%d) ", node.pos.row, node.pos.col)
 	case PIECE_MAP:
 		outchar := getPieceChar(node)
-		fmt.Printf("%c", outchar)
+		screen.SetContent(node.pos.col, node.pos.row, outchar, nil, defStyle)
 	case LIGHT_MAP:
-		outchar := getLightChar(node, lightBeams)
-		fmt.Printf("%c", outchar)
+		outchar, t := getLightChar(node, lightBeams)
+		switch t {
+		case LIGHT:
+			screen.SetContent(node.pos.col, node.pos.row, outchar, nil, lightStyle)
+		case LIGHT_TRAIL:
+			screen.SetContent(node.pos.col, node.pos.row, outchar, nil, lightTrailStyle)
+		case MIRR:
+			screen.SetContent(node.pos.col, node.pos.row, outchar, nil, mirrortStyle)
+		default:
+			screen.SetContent(node.pos.col, node.pos.row, outchar, nil, otherStyle)
+		}
+
 	case JUST_LIGHT_MAP:
 		outchar := getLightOnlyChar(node)
-		fmt.Printf("%c", outchar)
+		screen.SetContent(node.pos.col, node.pos.row, outchar, nil, defStyle)
 	}
 }
 
-func printMap(m lightMap, mapType int) {
-	fmt.Printf("Light Map:\n")
+func printMap(m lightMap, screen tcell.Screen, defStyle tcell.Style, mapType int) {
+	//fmt.Printf("Light Map:\n")
 
 	for _, line := range m.m {
 		for _, node := range line {
-			printMapNode(node, m.lightBeams, mapType)
+			printMapNode(node, m.lightBeams, screen, defStyle, mapType)
 		}
-		fmt.Println()
+		//fmt.Println()
 	}
+	screen.Show()
 }
 
 func readNode(c byte, pos mapCoord) *mapNodeStruct {
